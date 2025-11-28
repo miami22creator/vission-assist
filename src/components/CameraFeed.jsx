@@ -1,78 +1,115 @@
 import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 
-const CameraFeed = forwardRef(({ isActive }, ref) => {
+const CameraFeed = forwardRef(({ isActive, onDevicesLoaded }, ref) => {
     const videoRef = useRef(null);
-    const canvasRef = useRef(null);
     const [stream, setStream] = useState(null);
     const [error, setError] = useState(null);
+    const [devices, setDevices] = useState([]);
+    const [currentDeviceId, setCurrentDeviceId] = useState(null);
 
     useImperativeHandle(ref, () => ({
         captureFrame: () => {
-            if (videoRef.current && canvasRef.current) {
-                const video = videoRef.current;
-                const canvas = canvasRef.current;
-                const context = canvas.getContext('2d');
-
-                if (video.videoWidth === 0 || video.videoHeight === 0) return null;
-
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                return canvas.toDataURL('image/jpeg', 0.8);
-            }
-            return null;
+            if (!videoRef.current) return null;
+            const canvas = document.createElement('canvas');
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(videoRef.current, 0, 0);
+            return canvas.toDataURL('image/jpeg');
+        },
+        switchCamera: async () => {
+            if (devices.length < 2) return;
+            const currentIndex = devices.findIndex(d => d.deviceId === currentDeviceId);
+            const nextIndex = (currentIndex + 1) % devices.length;
+            const nextDeviceId = devices[nextIndex].deviceId;
+            setCurrentDeviceId(nextDeviceId);
         }
     }));
 
+    // Enumerate devices
     useEffect(() => {
-        if (isActive) {
-            startCamera();
-        } else {
-            stopCamera();
-        }
-        return () => stopCamera();
-    }, [isActive]);
-
-    const startCamera = async () => {
-        try {
-            const mediaStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' }
-            });
-            setStream(mediaStream);
-            if (videoRef.current) {
-                videoRef.current.srcObject = mediaStream;
+        const getDevices = async () => {
+            try {
+                const allDevices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = allDevices.filter(device => device.kind === 'videoinput');
+                setDevices(videoDevices);
+                if (onDevicesLoaded) onDevicesLoaded(videoDevices);
+            } catch (err) {
+                console.error("Error listing devices:", err);
             }
-            setError(null);
-        } catch (err) {
-            console.error("Error accessing camera:", err);
-            setError("Could not access camera. Please allow permissions.");
-        }
-    };
+        };
 
-    const stopCamera = () => {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            setStream(null);
+        // Request permission first to get device labels
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(s => {
+                s.getTracks().forEach(t => t.stop()); // Stop immediately, just needed permission
+                getDevices();
+            })
+            .catch(err => setError("Camera permission denied"));
+    }, []);
+
+    useEffect(() => {
+        if (!isActive) {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                setStream(null);
+            }
+            return;
         }
-    };
+
+        const startCamera = async () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                const constraints = {
+                    video: {
+                        deviceId: currentDeviceId ? { exact: currentDeviceId } : undefined,
+                        facingMode: currentDeviceId ? undefined : 'environment' // Default to back camera
+                    }
+                };
+
+                const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+                setStream(newStream);
+                if (videoRef.current) {
+                    videoRef.current.srcObject = newStream;
+                }
+
+                // If we didn't have a device ID (first run), set it to the active one
+                if (!currentDeviceId) {
+                    const track = newStream.getVideoTracks()[0];
+                    const settings = track.getSettings();
+                    setCurrentDeviceId(settings.deviceId);
+                }
+
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+                setError("Could not access camera.");
+            }
+        };
+
+        startCamera();
+
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [isActive, currentDeviceId]);
+
+    if (error) {
+        return <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white">{error}</div>;
+    }
 
     return (
-        <div className="relative w-full h-full bg-black overflow-hidden">
-            {error && (
-                <div className="absolute inset-0 flex items-center justify-center text-red-500 p-4 text-center z-10 bg-black/80">
-                    {error}
-                </div>
-            )}
-            <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-            />
-            <canvas ref={canvasRef} className="hidden" />
-        </div>
+        <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+        />
     );
 });
 

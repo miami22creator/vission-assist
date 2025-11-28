@@ -13,10 +13,12 @@ const Settings = ({ isOpen, onClose, onSave }) => {
     }, [isOpen]);
 
     const handleSave = () => {
-        localStorage.setItem('ai_provider', provider);
-        localStorage.setItem('ai_api_key', apiKey);
-        onSave({ provider, apiKey });
-        onClose();
+        if (window.confirm("Are you sure you want to save these changes?")) {
+            localStorage.setItem('ai_provider', provider);
+            localStorage.setItem('ai_api_key', apiKey);
+            onSave({ provider, apiKey });
+            onClose();
+        }
     };
 
     if (!isOpen) return null;

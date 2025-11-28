@@ -3,7 +3,7 @@ import CameraFeed from './components/CameraFeed';
 import VoiceService from './services/VoiceService';
 import AIService from './services/AIService';
 import Settings from './components/Settings';
-import { Mic, MicOff, Camera, Settings as SettingsIcon } from 'lucide-react';
+import { Mic, MicOff, Camera, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
 
 // Speech recognition is causing crashes, so we mock it for now
 // import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
@@ -76,9 +76,37 @@ function App() {
         setIsListening(false);
     };
 
+    const handleSwitchCamera = () => {
+        VoiceService.speak("Switching camera...");
+        if (cameraRef.current) {
+            cameraRef.current.switchCamera();
+        }
+    };
+
+    // Triple tap logic
+    const [tapCount, setTapCount] = useState(0);
+    const tapTimeoutRef = useRef(null);
+
     const handleScreenTap = () => {
-        if (showSettings) return; // Don't trigger if settings is open
-        processImage();
+        if (showSettings) return;
+
+        // Triple tap detection for settings
+        setTapCount(prev => prev + 1);
+
+        if (tapTimeoutRef.current) {
+            clearTimeout(tapTimeoutRef.current);
+        }
+
+        tapTimeoutRef.current = setTimeout(() => {
+            if (tapCount + 1 === 3) { // +1 because state update is async
+                VoiceService.speak("Opening settings.");
+                setShowSettings(true);
+            } else {
+                // If not a triple tap, process image as usual
+                processImage();
+            }
+            setTapCount(0);
+        }, 400); // 400ms window for triple tap
     };
 
     return (
@@ -108,12 +136,7 @@ function App() {
                     </div>
 
                     <div className="flex gap-3">
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setShowSettings(true); }}
-                            className="bg-black/60 backdrop-blur-md p-3 rounded-full text-white active:bg-gray-700"
-                        >
-                            <SettingsIcon className="w-6 h-6" />
-                        </button>
+                        {/* Settings button removed for safety */}
                         <div className="bg-black/60 backdrop-blur-md p-3 rounded-full text-white">
                             <MicOff className="w-6 h-6 text-gray-400" />
                         </div>
@@ -132,7 +155,7 @@ function App() {
                 </div>
 
                 {/* Bottom Controls */}
-                <div className="flex justify-center gap-6 pointer-events-auto pb-8">
+                <div className="relative flex justify-center gap-6 pointer-events-auto pb-8">
                     <button
                         onClick={(e) => { e.stopPropagation(); processImage(); }}
                         className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
@@ -141,12 +164,13 @@ function App() {
                         <Camera className="w-8 h-8 text-black" />
                     </button>
 
+                    {/* Camera Switch - Bottom Right */}
                     <button
-                        onClick={(e) => { e.stopPropagation(); toggleListening(); }}
-                        className="w-20 h-20 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform bg-gray-600"
-                        aria-label="Voice Command Disabled"
+                        onClick={(e) => { e.stopPropagation(); handleSwitchCamera(); }}
+                        className="absolute right-0 bottom-10 bg-black/60 backdrop-blur-md p-4 rounded-full text-white active:bg-gray-700"
+                        aria-label="Switch Camera"
                     >
-                        <MicOff className="w-8 h-8 text-white" />
+                        <RefreshCw className="w-6 h-6" />
                     </button>
                 </div>
             </div>
