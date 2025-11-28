@@ -18,11 +18,19 @@ const CameraFeed = forwardRef(({ isActive, onDevicesLoaded }, ref) => {
             return canvas.toDataURL('image/jpeg');
         },
         switchCamera: async () => {
-            if (devices.length < 2) return;
+            if (devices.length < 2) return null;
             const currentIndex = devices.findIndex(d => d.deviceId === currentDeviceId);
             const nextIndex = (currentIndex + 1) % devices.length;
-            const nextDeviceId = devices[nextIndex].deviceId;
-            setCurrentDeviceId(nextDeviceId);
+            const nextDevice = devices[nextIndex];
+            setCurrentDeviceId(nextDevice.deviceId);
+
+            // Clean up label for better speech
+            let label = nextDevice.label || `Camera ${nextIndex + 1}`;
+            label = label.replace(/\(.*\)/g, "").trim(); // Remove technical IDs in brackets if any
+            if (label.toLowerCase().includes("back") || label.toLowerCase().includes("environment")) label = "Back Camera";
+            if (label.toLowerCase().includes("front") || label.toLowerCase().includes("user")) label = "Front Camera";
+
+            return label;
         }
     }));
 

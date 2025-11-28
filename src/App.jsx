@@ -76,10 +76,14 @@ function App() {
         setIsListening(false);
     };
 
-    const handleSwitchCamera = () => {
-        VoiceService.speak("Switching camera...");
+    const handleSwitchCamera = async () => {
         if (cameraRef.current) {
-            cameraRef.current.switchCamera();
+            const cameraName = await cameraRef.current.switchCamera();
+            if (cameraName) {
+                VoiceService.speak(cameraName);
+            } else {
+                VoiceService.speak("No other cameras found.");
+            }
         }
     };
 
